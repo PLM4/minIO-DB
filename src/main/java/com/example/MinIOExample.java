@@ -2,15 +2,17 @@ package com.example;
 
 import io.minio.*;
 import io.minio.messages.Item;
-import io.minio.errors.*;
-import java.io.IOException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Scanner;
 
 public class MinIOExample {
 
     private static final Scanner scanner = new Scanner(System.in);
+    private static final String DOWNLOADS_DIR = "downloads";
 
     public static void main(String[] args) {
         // Configuração do cliente
@@ -29,7 +31,8 @@ public class MinIOExample {
                 System.out.println("2. Fazer upload de arquivo");
                 System.out.println("3. Fazer download de arquivo");
                 System.out.println("4. Listar objetos no bucket");
-                System.out.println("5. Remover objeto");
+                System.out.println("5. Abrir pasta de downloads");
+                System.out.println("6. Remover objeto");
                 System.out.println("0. Sair");
                 System.out.print("Escolha uma opção: ");
 
@@ -48,16 +51,15 @@ public class MinIOExample {
                         uploadFile(minioClient, bucketName, objectName, filePath);
                         break;
                     case 3:
-                        System.out.print("Digite o nome do objeto para download: ");
-                        String downloadObject = scanner.nextLine();
-                        System.out.print("Digite o caminho para salvar o download: ");
-                        String downloadPath = scanner.nextLine();
-                        downloadFile(minioClient, bucketName, downloadObject, downloadPath);
+                        handleDownload(minioClient, bucketName);
                         break;
                     case 4:
                         listObjects(minioClient, bucketName);
                         break;
                     case 5:
+                        openDownloadsFolder();
+                        break;
+                    case 6:
                         System.out.print("Digite o nome do objeto para remover: ");
                         String objectToRemove = scanner.nextLine();
                         removeObject(minioClient, bucketName, objectToRemove);
@@ -105,15 +107,81 @@ public class MinIOExample {
         System.out.println("Arquivo '" + objectName + "' carregado com sucesso.");
     }
 
-    public static void downloadFile(MinioClient minioClient, String bucketName,
-            String objectName, String downloadPath) throws Exception {
-        minioClient.downloadObject(
-                DownloadObjectArgs.builder()
-                        .bucket(bucketName)
-                        .object(objectName)
-                        .filename(downloadPath)
-                        .build());
-        System.out.println("Arquivo baixado para: " + downloadPath);
+    private static void handleDownload(MinioClient minioClient, String bucketName) {
+        try {
+            System.out.print("\nNome do objeto (ex: photos/image.jpg): ");
+            String objectName = scanner.nextLine().trim();
+
+            if (objectName.isEmpty()) {
+                System.out.println("Nome não pode ser vazio!");
+                return;
+            }
+
+            // Pega só o nome do arquivo (ignora pastas)
+            String fileName = objectName.substring(objectName.lastIndexOf('/') + 1);
+
+            // Pergunta onde salvar
+            System.out.print("Nome para salvar [" + fileName + "]: ");
+            String customName = scanner.nextLine().trim();
+            String finalName = customName.isEmpty() ? fileName : customName;
+
+            // Executa o download
+            boolean success = downloadFile(minioClient, bucketName, objectName, finalName);
+
+            if (success) {
+                System.out.println("✅ Download concluído: " + finalName);
+            } else {
+                System.out.println("❌ Falha no download");
+            }
+
+        } catch (Exception e) {
+            System.err.println("Erro: " + e.getMessage());
+        }
+    }
+
+    private static boolean downloadFile(MinioClient minioClient, String bucketName,
+            String objectName, String saveAs) {
+        try {
+            // Cria pasta downloads se não existir
+            Path downloadsPath = Paths.get(DOWNLOADS_DIR);
+            if (!Files.exists(downloadsPath)) {
+                Files.createDirectories(downloadsPath);
+            }
+
+            // Caminho completo do arquivo final
+            Path destination = downloadsPath.resolve(saveAs);
+
+            // Faz o download
+            try (InputStream stream = minioClient.getObject(
+                    GetObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(objectName)
+                            .build())) {
+
+                Files.copy(stream, destination, StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            // Verifica se o arquivo foi criado
+            return Files.exists(destination) && Files.size(destination) > 0;
+
+        } catch (Exception e) {
+            System.err.println("Erro no download: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private static void openDownloadsFolder() {
+        try {
+            String downloadsPath = Paths.get(System.getProperty("user.dir"), DOWNLOADS_DIR).toString();
+
+            if (System.getProperty("os.name").toLowerCase().contains("win")) {
+                new ProcessBuilder("explorer", downloadsPath).start();
+            } else {
+                System.out.println("Pasta de downloads: " + downloadsPath);
+            }
+        } catch (Exception e) {
+            System.err.println("Não foi possivel abrir a pasta de downloads" + e.getMessage());
+        }
     }
 
     public static void listObjects(MinioClient minioClient, String bucketName)
