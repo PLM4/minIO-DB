@@ -1,0 +1,3 @@
+quando for upar a imagem, lembrar de por o ./imagens/...
+
+exemplo: ./imagens/man-playing-golf.jpg

@@ -1,0 +1,9 @@
+com\example\service\UploadService.class
+com\example\service\ListService.class
+com\example\service\RemoveService.class
+com\example\service\DownloadService.class
+com\example\MinioExample.class
+com\example\model\MinioFile.class
+com\example\controller\MinioController.class
+com\example\config\MinioConfig.class
+com\example\service\BucketService.class
